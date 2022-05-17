@@ -1,11 +1,14 @@
 import java.io.File;
+import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class Settings {
   private static Settings instance;
   private List<FileIndex> index = new ArrayList<>();
   private List<Integer> dstoreJoined = new ArrayList<Integer>();
+  private HashMap<Integer,Socket> clientNow = new HashMap<Integer,Socket>();
 
   private Settings() {
 
@@ -73,5 +76,12 @@ public class Settings {
 
   public void addDstoreJoined(int i) {
     dstoreJoined.add(i);
+  }
+
+  public void setClientNow(Socket client,int port){
+    this.clientNow.put(port,client);
+  }
+  public Socket getClientNow(int port){
+    return clientNow.get(port);
   }
 }

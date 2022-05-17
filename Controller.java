@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
 import java.util.List;
 
 public class Controller {
@@ -12,6 +13,7 @@ public class Controller {
   private static int timeout;
   private static int rebalance_period;
   private static ServerSocket server;
+  //private static HashMap<Socket,Integer> clients;
 
 
   public Controller(int cport, int r, int timeout, int rebalance_period) {
@@ -52,6 +54,7 @@ public class Controller {
         try {
           Socket client = server.accept();
           //client.setSoTimeout(timeout);不能加！！！
+          //clients.put(client,client.getLocalPort());
           Thread t = new Thread(() -> handle(client));
           t.start();
         } catch (IOException e) {
@@ -74,38 +77,17 @@ public class Controller {
         } else if (Settings.getInstance().getDstoreJoined().size() < r) {
           pw.println(Protocol.ERROR_NOT_ENOUGH_DSTORES_TOKEN);
         } else {
+
+
           if (line.contains(Protocol.LIST_TOKEN)) {
             list(pw, br);
           } else if (line.contains(Protocol.STORE_ACK_TOKEN)) {
-            System.out.println("收到STORE_ACK");
             Settings.getInstance().countIndex(line1[1]);
             if (Settings.getInstance().findIndex(line1[1]).count == 0) {
               Settings.getInstance().stateIndex("store in progress", "store complete", line1[1]);
             }
-            if (Settings.getInstance().findIndex(line1[1]).state.equals("store complete")) {
-              pw.println(Protocol.STORE_COMPLETE_TOKEN);
-            }
           } else if (line.contains(Protocol.STORE_TOKEN)) {
-            //STORE filename filesize
-            Boolean exist = false;
-            int files = Settings.getInstance().getIndex().size();
-            for (int i = 0; i < files; i++) {
-              if (Settings.getInstance().getIndex().get(i).name.equals(line1[1])) {
-                exist = true;
-              }
-            }
-            if (exist) {
-              pw.println(Protocol.ERROR_FILE_ALREADY_EXISTS_TOKEN);
-            } else {
-              List<Integer> l = Settings.getInstance().getDstoreJoined();
-              FileIndex newFile = new FileIndex("store in progress", 2, line1[1], l, Integer.valueOf(line1[2]));
-              Settings.getInstance().getIndex().add(newFile);
-              String allPorts = " ";
-              for (int i = 0; i < l.size(); i++) {
-                allPorts += l.get(i) + " ";
-              }
-              pw.println(Protocol.STORE_TO_TOKEN + allPorts);
-            }
+            store(client,line1);
           } else {
             pw.println("未知协议");
           }
@@ -121,7 +103,41 @@ public class Controller {
     pw.println(Protocol.LIST_TOKEN);
   }
 
+  private static void store(Socket client,String[] line1) throws IOException, InterruptedException {
+    //STORE filename filesize
+    Boolean exist = false;
+    int files = Settings.getInstance().getIndex().size();
+    for (int i = 0; i < files; i++) {
+      if (Settings.getInstance().getIndex().get(i).name.equals(line1[1])) {
+        exist = true;
+      }
+    }
+    if (exist) {
+      send(client,Protocol.ERROR_FILE_ALREADY_EXISTS_TOKEN);
+    } else {
+      List<Integer> l = Settings.getInstance().getDstoreJoined();
+      FileIndex newFile = new FileIndex("store in progress", 2, line1[1], l, Integer.valueOf(line1[2]));
+      Settings.getInstance().getIndex().add(newFile);
+      String allPorts = " ";
+      for (int i = 0; i < l.size(); i++) {
+        allPorts += l.get(i) + " ";
+      }
+      send(client,Protocol.STORE_TO_TOKEN + allPorts);
+      while(!Settings.getInstance().findIndex(line1[1]).state.equals("store complete")) {
 
+      }
+      System.out.println(Settings.getInstance().findIndex(line1[1]).name);
+      send(client, Protocol.STORE_COMPLETE_TOKEN);
+    }
+
+
+
+  }
+
+  public static void send(Socket socket, String message) throws IOException {
+    PrintWriter pw = new PrintWriter(socket.getOutputStream(), true);
+    pw.println(message);
+  }
 
 
 }
