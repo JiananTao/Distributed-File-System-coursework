@@ -70,11 +70,11 @@ public class Dstore {
   private static void handleController(){
     new Thread(() -> {
       try {
-        PrintWriter pw = new PrintWriter(controllerSocket.getOutputStream(), true);
         BufferedReader br = new BufferedReader(new InputStreamReader(controllerSocket.getInputStream()));
-        pw.println(Protocol.JOIN_TOKEN + " " + port);
+        send(controllerSocket,Protocol.JOIN_TOKEN + " " + port);
         String line;
         while ((line = br.readLine()) != null) {
+          System.out.println(line);
         /*
         if (line.contains(Protocol.STORE_TOKEN)) {
           pw.println(Protocol.ACK_TOKEN);
@@ -90,21 +90,19 @@ public class Dstore {
     }).start();
   }
 
-  public void send(Socket socket, String message) throws IOException {
+  public static void send(Socket socket, String message) throws IOException {
     PrintWriter pw = new PrintWriter(socket.getOutputStream(), true);
     pw.println(message);
   }
   public static void handle(Socket client){
     try {
-      OutputStream osC = controllerSocket.getOutputStream();
-      PrintWriter pwController = new PrintWriter(osC,true);
-
       OutputStream os = client.getOutputStream();//os.write
       PrintWriter pwClient = new PrintWriter(os, true);
       InputStream is = client.getInputStream();
       BufferedReader brClient = new BufferedReader(new InputStreamReader(is));
       String line;
       while ((line = brClient.readLine()) != null) {
+        System.out.println(line);
         String[] line1 = line.split("\\s+");
         if (line.contains(Protocol.STORE_TOKEN)){
           pwClient.println(Protocol.ACK_TOKEN);
@@ -119,7 +117,7 @@ public class Dstore {
             return;
           }
           System.out.println(client.getRemoteSocketAddress() + "完成文件传输");
-          pwController.println(Protocol.STORE_ACK_TOKEN + " " + line1[1]);
+          send(controllerSocket,Protocol.STORE_ACK_TOKEN + " " + line1[1]);
         }
       }
     } catch (Exception e) {
