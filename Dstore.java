@@ -10,6 +10,7 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import jdk.management.jfr.SettingDescriptorInfo;
 
 public class Dstore {
   private static int port;
@@ -47,7 +48,7 @@ public class Dstore {
       dServer = new ServerSocket(port);
       controllerSocket = new Socket(InetAddress.getLoopbackAddress(), cport);
       handleClient();
-      handleController();
+      handleController(controllerSocket);
     }catch (IOException e) {
       System.err.println("Can not create dServer: " + e.getMessage());
       System.exit(-1);
@@ -67,7 +68,7 @@ public class Dstore {
       }
     }).start();
   }
-  private static void handleController(){
+  private static void handleController(Socket client){
     new Thread(() -> {
       try {
         BufferedReader br = new BufferedReader(new InputStreamReader(controllerSocket.getInputStream()));
@@ -75,17 +76,20 @@ public class Dstore {
         String line;
         while ((line = br.readLine()) != null) {
           System.out.println(line);
-        /*
-        if (line.contains(Protocol.STORE_TOKEN)) {
-          pw.println(Protocol.ACK_TOKEN);
-        } else {
-          pw.println("未知协议");
-        }
-
-         */
+          String[] line1 = line.split("\\s+");
+          if (line1[0].contains(Protocol.REMOVE_TOKEN)) {
+            File file = new File(file_folder, line1[1]);
+            if (!file.exists()) {
+              send(client, Protocol.ERROR_FILE_DOES_NOT_EXIST_TOKEN + " " + line1[1]);
+            } else {
+              file.delete();
+              //System.out.println(Settings.getInstance().getIndex().size());
+              send(client, Protocol.REMOVE_ACK_TOKEN + " " + line1[1]);
+            }
+          }
         }
       } catch (Exception e) {
-        System.out.println("Dstore服务端" + controllerSocket.getRemoteSocketAddress() + "下线了。");
+        System.out.println(e.getMessage());
       }
     }).start();
   }
@@ -104,7 +108,8 @@ public class Dstore {
       while ((line = brClient.readLine()) != null) {
         System.out.println(line);
         String[] line1 = line.split("\\s+");
-        if (line.contains(Protocol.STORE_TOKEN)){
+        System.out.println(line1[0]);
+        if (line1[0].contains(Protocol.STORE_TOKEN)){
           pwClient.println(Protocol.ACK_TOKEN);
           System.out.println(client.getRemoteSocketAddress() + "开始文件传输");
           byte[] bytes = is.readNBytes(Integer.parseInt(line1[2]));
@@ -118,10 +123,20 @@ public class Dstore {
           }
           System.out.println(client.getRemoteSocketAddress() + "完成文件传输");
           send(controllerSocket,Protocol.STORE_ACK_TOKEN + " " + line1[1]);
+
+        }else if (line1[0].contains(Protocol.LOAD_DATA_TOKEN)){
+          //LOAD_DATA filename
+          System.out.println(client.getRemoteSocketAddress() + "开始文件传输");
+          File file = new File(file_folder, line1[1]);
+          if (!file.exists()) {client.close();}
+          byte[] bytes = new byte[(int) file.length()];
+          os.write(bytes);
+          Settings.getInstance().setClientReload(client.getPort(),true);
+          System.out.println(client.getRemoteSocketAddress() + "完成文件传输");
         }
       }
     } catch (Exception e) {
-      System.out.println("客户端" + client.getRemoteSocketAddress() + "下线了。");
+      System.out.println(e.getMessage());
     }
   }
   static boolean delFile(File file) {
